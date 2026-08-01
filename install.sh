@@ -8,7 +8,128 @@
 # Last Updated: March 1, 2024
 # ==============================================================================
 
-source ./config
+SCRIPT_DIR=${0:A:h}
+SCRIPT_NAME=${0:t}
+source "${SCRIPT_DIR}/config"
+
+typeset -A SECTION_PARAMETERS=(
+  authenticate-sudo RUN_AUTHENTICATE_SUDO
+  update-macos RUN_UPDATE_MACOS
+  install-rosetta RUN_INSTALL_ROSETTA
+  install-homebrew RUN_INSTALL_HOMEBREW
+  install-brew-packages RUN_INSTALL_BREW_PACKAGES
+  install-app-store RUN_INSTALL_APP_STORE
+  install-vscode-extensions RUN_INSTALL_VSCODE_EXTENSIONS
+  install-node RUN_INSTALL_NODE
+  install-npm-packages RUN_INSTALL_NPM_PACKAGES
+  install-dotnet RUN_INSTALL_DOTNET
+  install-firefox-developer RUN_INSTALL_FIREFOX_DEVELOPER
+  install-databases RUN_INSTALL_DATABASES
+  setup-mysql RUN_SETUP_MYSQL
+  install-games RUN_INSTALL_GAMES
+  install-unity-hub RUN_INSTALL_UNITY_HUB
+  install-figma RUN_INSTALL_FIGMA
+  cleanup-homebrew RUN_CLEANUP_HOMEBREW
+  configure-settings RUN_CONFIGURE_SETTINGS
+  configure-dock RUN_CONFIGURE_DOCK
+  configure-git RUN_CONFIGURE_GIT
+  install-oh-my-zsh RUN_INSTALL_OH_MY_ZSH
+  reboot RUN_REBOOT
+)
+typeset -A CLI_SECTION_VALUES
+
+usage() {
+  echo "Usage: ${SCRIPT_NAME} [--all yes|no] [--section yes|no]"
+  echo
+  echo "  --all                       Run or skip every unspecified section"
+  echo
+  echo "Sections:"
+  for section in ${(ok)SECTION_PARAMETERS}; do
+    echo "  --${section}"
+  done
+  echo
+  echo "The equivalent config variables are the RUN_* values in config.example."
+}
+
+while (( $# > 0 )); do
+  argument=$1
+  case "$argument" in
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --*=*)
+      option=${argument%%=*}
+      value=${argument#*=}
+      ;;
+    --*)
+      if (( $# < 2 )); then
+        echo "Missing yes/no value for ${argument}" >&2
+        exit 2
+      fi
+      option=$argument
+      value=$2
+      shift
+      ;;
+    *)
+      echo "Unknown argument: ${argument}" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+
+  section=${option#--}
+  if [[ "$section" != all ]]; then
+    variable_name=${SECTION_PARAMETERS[$section]-}
+  else
+    variable_name=RUN_ALL
+  fi
+  if [[ -z "$variable_name" ]]; then
+    echo "Unknown section: ${section}" >&2
+    usage >&2
+    exit 2
+  fi
+  case ${(L)value} in
+    y|yes|true|1|n|no|false|0) ;;
+    *)
+      echo "Invalid value '${value}' for ${option}; use yes or no." >&2
+      exit 2
+      ;;
+  esac
+  if [[ "$section" == all ]]; then
+    CLI_ALL_VALUE=$value
+  else
+    CLI_SECTION_VALUES[$variable_name]=$value
+  fi
+  shift
+done
+
+should_run() {
+  local variable_name=$1
+  local prompt=$2
+  local value
+
+  if (( ${+CLI_SECTION_VALUES[$variable_name]} )); then
+    value=${CLI_SECTION_VALUES[$variable_name]}
+  elif (( ${(P)+variable_name} )); then
+    value=${(P)variable_name}
+  elif [[ -n ${CLI_ALL_VALUE+x} ]]; then
+    value=$CLI_ALL_VALUE
+  elif [[ -n ${RUN_ALL+x} ]]; then
+    value=$RUN_ALL
+  else
+    read "value?${prompt} [y/N] "
+  fi
+
+  case ${(L)value} in
+    y|yes|true|1) return 0 ;;
+    n|no|false|0|'') return 1 ;;
+    *)
+      echo "Invalid value '${value}' for ${variable_name}; use yes or no." >&2
+      exit 2
+      ;;
+  esac
+}
 
 # COLOR
 RED='\033[0;31m'
@@ -28,153 +149,151 @@ echo "| | | | \__ \ || (_| | | |_\__ \ | | |"
 echo "|_|_| |_|___/\__\__,_|_|_(_)___/_| |_|"
 echo
 echo
-echo Enter root password
+if should_run RUN_AUTHENTICATE_SUDO "Authenticate with sudo upfront?"; then
+  echo Enter root password
 
-# Ask for the administrator password upfront.
-sudo -v
+  # Ask for the administrator password upfront.
+  sudo -v
 
-# Keep Sudo until script is finished
-while true; do
-  sudo -n true
-  sleep 60
-  kill -0 "$$" || exit
-done 2>/dev/null &
+  # Keep Sudo until script is finished
+  while true; do
+    sudo -n true
+    sleep 60
+    kill -0 "$$" || exit
+  done 2>/dev/null &
+fi
 
 # Update macOS
-echo
-echo "${GREEN}Looking for updates.."
-echo
-sudo softwareupdate -i -a
+if should_run RUN_UPDATE_MACOS "Update macOS?"; then
+  echo
+  echo "${GREEN}Looking for updates.."
+  echo
+  sudo softwareupdate -i -a
+fi
 
 # Install Rosetta
-sudo softwareupdate --install-rosetta --agree-to-license
+if should_run RUN_INSTALL_ROSETTA "Install Rosetta?"; then
+  sudo softwareupdate --install-rosetta --agree-to-license
+fi
 
 # Install Homebrew
-echo
-echo "${GREEN}Installing Homebrew"
-echo
-NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+if should_run RUN_INSTALL_HOMEBREW "Install Homebrew?"; then
+  echo
+  echo "${GREEN}Installing Homebrew"
+  echo
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# Append Homebrew initialization to .zprofile
-echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >>${HOME}/.zprofile
-# Immediately evaluate the Homebrew environment settings for the current session
-eval "$(/opt/homebrew/bin/brew shellenv)"
+  # Append Homebrew initialization to .zprofile
+  echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >>${HOME}/.zprofile
+  # Immediately evaluate the Homebrew environment settings for the current session
+  eval "$(/opt/homebrew/bin/brew shellenv)"
 
-# Check installation and update
-echo
-echo "${GREEN}Checking installation.."
-echo
-brew update && brew doctor
-export HOMEBREW_NO_INSTALL_CLEANUP=1
+  # Check installation and update
+  echo
+  echo "${GREEN}Checking installation.."
+  echo
+  brew update && brew doctor
+  export HOMEBREW_NO_INSTALL_CLEANUP=1
+fi
 
 # Check for Brewfile in the current directory and use it if present
-if [ -f "./Brewfile" ]; then
-  echo
-  echo "${GREEN}Brewfile found. Using it to install packages..."
-  brew bundle
-  echo "${GREEN}Installation from Brewfile complete."
-else
-  # If no Brewfile is present, continue with the default installation
+if should_run RUN_INSTALL_BREW_PACKAGES "Install Homebrew packages?"; then
+  if [ -f "${SCRIPT_DIR}/Brewfile" ]; then
+    echo
+    echo "${GREEN}Brewfile found. Using it to install packages..."
+    brew bundle --file="${SCRIPT_DIR}/Brewfile"
+    echo "${GREEN}Installation from Brewfile complete."
+  else
+    echo
+    echo "${GREEN}Installing formulae..."
+    for formula in "${FORMULAE[@]}"; do
+      brew install "$formula"
+      if [ $? -ne 0 ]; then
+        echo "${RED}Failed to install $formula. Continuing...${NC}"
+      fi
+    done
 
-  # Install Casks and Formulae
-  echo
-  echo "${GREEN}Installing formulae..."
-  for formula in "${FORMULAE[@]}"; do
-    brew install "$formula"
-    if [ $? -ne 0 ]; then
-      echo "${RED}Failed to install $formula. Continuing...${NC}"
-    fi
-  done
-
-  echo "${GREEN}Installing casks..."
-  for cask in "${CASKS[@]}"; do
-    brew install --cask "$cask"
-    if [ $? -ne 0 ]; then
-      echo "${RED}Failed to install $cask. Continuing...${NC}"
-    fi
-  done
-
-  # App Store
-  echo
-  echo -n "${RED}Install apps from App Store? ${NC}[y/N]"
-  read REPLY
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    brew install mas
-    for app in "${APPSTORE[@]}"; do
-      eval "mas install $app"
+    echo "${GREEN}Installing casks..."
+    for cask in "${CASKS[@]}"; do
+      brew install --cask "$cask"
+      if [ $? -ne 0 ]; then
+        echo "${RED}Failed to install $cask. Continuing...${NC}"
+      fi
     done
   fi
+fi
 
-  # VS Code Extensions
-  echo
-  echo -n "${RED}Install VSCode Extensions? ${NC}[y/N]"
-  read REPLY
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    # Install VS Code extensions from config.sh file
-    for extension in "${VSCODE[@]}"; do
-      code --install-extension "$extension"
-    done
-  fi
+# App Store
+if should_run RUN_INSTALL_APP_STORE "Install apps from App Store?"; then
+  brew install mas
+  for app in "${APPSTORE[@]}"; do
+    mas install "$app"
+  done
+fi
+
+# VS Code Extensions
+if should_run RUN_INSTALL_VSCODE_EXTENSIONS "Install VS Code extensions?"; then
+  for extension in "${VSCODE[@]}"; do
+    code --install-extension "$extension"
+  done
 fi
 
 # Install Node.js
-echo
-echo -n "${RED}Install Node.js via NVM or Brew? ${NC}[N/b]"
-read REPLY
-if [[ -z $REPLY || $REPLY =~ ^[Nn]$ ]]; then
-  echo "${GREEN}Installing NVM..."
-  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+if should_run RUN_INSTALL_NODE "Install Node.js?"; then
+  if [[ -z ${NODE_INSTALL_METHOD+x} ]]; then
+    read "NODE_INSTALL_METHOD?Install Node.js via NVM or Homebrew? [nvm/homebrew] "
+  fi
 
-  # Loads NVM
-  export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  case ${(L)NODE_INSTALL_METHOD} in
+    nvm|n)
+      echo "${GREEN}Installing NVM..."
+      curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 
-  echo "${GREEN}Installing Node via NVM..."
-  nvm install --lts
-  nvm install node
-  nvm alias default node
-  nvm use default
+      # Loads NVM
+      export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+      [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-fi
-if [[ $REPLY =~ ^[Bb]$ ]]; then
-  echo "${GREEN}Installing Node via Homebrew..."
-  brew install node
-
+      echo "${GREEN}Installing Node via NVM..."
+      nvm install --lts
+      nvm install node
+      nvm alias default node
+      nvm use default
+      ;;
+    homebrew|brew|b)
+      echo "${GREEN}Installing Node via Homebrew..."
+      brew install node
+      ;;
+    *)
+      echo "Invalid NODE_INSTALL_METHOD '${NODE_INSTALL_METHOD}'; use nvm or homebrew." >&2
+      exit 2
+      ;;
+  esac
 fi
 
 # Install NPM Packages
-echo
-echo "${GREEN}Installing Global NPM Packages..."
-npm install -g ${NPMPACKAGES[@]}
+if should_run RUN_INSTALL_NPM_PACKAGES "Install global NPM packages?"; then
+  echo
+  echo "${GREEN}Installing Global NPM Packages..."
+  npm install -g ${NPMPACKAGES[@]}
+fi
 
 # Optional Packages
-echo
-echo -n "${RED}Install .NET? ${NC}[y/N]"
-read REPLY
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+if should_run RUN_INSTALL_DOTNET "Install .NET?"; then
   brew install dotnet
   export DOTNET_ROOT="/opt/homebrew/opt/dotnet/libexec"
 fi
 
-echo
-echo -n "${RED}Install Firefox Developer Edition? ${NC}[y/N]"
-read REPLY
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+if should_run RUN_INSTALL_FIREFOX_DEVELOPER "Install Firefox Developer Edition?"; then
   brew tap homebrew/cask-versions
   brew install firefox-developer-edition
 fi
 
-echo
-echo -n "${RED}Install PosreSQL, MySQL & MongoDB? ${NC}[y/N]"
-read REPLY
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+if should_run RUN_INSTALL_DATABASES "Install PostgreSQL, MySQL, and MongoDB?"; then
   # Postgres
   brew install postgresql
   # MySQL
   brew install mysql
-  echo -n "${RED}Set up MySQL now? ${NC}[y/N]"
-  read REPLY
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
+  if should_run RUN_SETUP_MYSQL "Set up MySQL now?"; then
     echo "${GREEN}Starting MySQL..."
     brew services start mysql
     sleep 2
@@ -185,40 +304,30 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
   brew install mongodb-community
 fi
 
-echo
-echo -n "${RED}Install Epic & Steam ${NC}[y/N]"
-read REPLY
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+if should_run RUN_INSTALL_GAMES "Install Epic Games and Steam?"; then
   brew install steam epic-games
 fi
 
-echo
-echo -n "${RED}Install Unity Hub? ${NC}[y/N]"
-read REPLY
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+if should_run RUN_INSTALL_UNITY_HUB "Install Unity Hub?"; then
   brew install unity-hub
 fi
 
-echo
-echo -n "${RED}Install Figma? ${NC}[y/N]"
-read REPLY
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+if should_run RUN_INSTALL_FIGMA "Install Figma?"; then
   brew install figma
 fi
 
 # Cleanup
-echo
-echo "${GREEN}Cleaning up..."
-brew update && brew upgrade && brew cleanup && brew doctor
-mkdir -p ~/Library/LaunchAgents
-brew tap homebrew/autoupdate
-brew autoupdate start $HOMEBREW_UPDATE_FREQUENCY --upgrade --cleanup --immediate --sudo
+if should_run RUN_CLEANUP_HOMEBREW "Clean up and configure Homebrew autoupdate?"; then
+  echo
+  echo "${GREEN}Cleaning up..."
+  brew update && brew upgrade && brew cleanup && brew doctor
+  mkdir -p ~/Library/LaunchAgents
+  brew tap homebrew/autoupdate
+  brew autoupdate start $HOMEBREW_UPDATE_FREQUENCY --upgrade --cleanup --immediate --sudo
+fi
 
 # Settings
-echo
-echo -n "${RED}Configure default system settings? ${NC}[Y/n]"
-read REPLY
-if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
+if should_run RUN_CONFIGURE_SETTINGS "Configure default system settings?"; then
   echo "${GREEN}Configuring default settings..."
   for setting in "${SETTINGS[@]}"; do
     eval $setting
@@ -226,10 +335,7 @@ if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 # Dock settings
-echo
-echo -n "${RED}Apply Dock settings?? ${NC}[y/N]"
-read REPLY
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+if should_run RUN_CONFIGURE_DOCK "Apply Dock settings?"; then
   brew install dockutil
   # Handle replacements
   for item in "${DOCK_REPLACE[@]}"; do
@@ -247,27 +353,33 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 # Git Login
-echo
-echo "${GREEN}SET UP GIT"
-echo
+if should_run RUN_CONFIGURE_GIT "Configure Git?"; then
+  echo
+  echo "${GREEN}SET UP GIT"
+  echo
 
-echo "${RED}Please enter your git username:${NC}"
-read name
-echo "${RED}Please enter your git email:${NC}"
-read email
+  if [[ -z ${GIT_NAME+x} ]]; then
+    read "GIT_NAME?${RED}Please enter your git username:${NC} "
+  fi
+  if [[ -z ${GIT_EMAIL+x} ]]; then
+    read "GIT_EMAIL?${RED}Please enter your git email:${NC} "
+  fi
 
-git config --global user.name "$name"
-git config --global user.email "$email"
-git config --global color.ui true
+  git config --global user.name "$GIT_NAME"
+  git config --global user.email "$GIT_EMAIL"
+  git config --global color.ui true
 
-echo
-echo "${GREEN}GITTY UP!"
+  echo
+  echo "${GREEN}GITTY UP!"
+fi
 
 # ohmyzsh
-echo
-echo "${GREEN}Installing ohmyzsh!"
-echo
-sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+if should_run RUN_INSTALL_OH_MY_ZSH "Install Oh My Zsh?"; then
+  echo
+  echo "${GREEN}Installing ohmyzsh!"
+  echo
+  sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+fi
 
 clear
 echo "${GREEN}______ _____ _   _  _____ "
@@ -279,7 +391,7 @@ echo "${GREEN}|___/  \___/\_| \_/\____/ "
 
 echo
 echo
-printf "${RED}"
-read -s -k $'?Press ANY KEY to REBOOT\n'
-sudo reboot
+if should_run RUN_REBOOT "Reboot now?"; then
+  sudo reboot
+fi
 exit

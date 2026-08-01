@@ -42,11 +42,33 @@ The script performs a variety of tasks to prepare a macOS machine for use:
 
 3. **Run the Script:** Open Terminal, navigate to the cloned directory, and execute:
 
-```
+```sh
 ./install.sh
 ```
 
 Follow any on-screen prompts to customize your installation further.
+
+### Section Controls
+
+Each section prompts only when neither a section value nor a global value is
+defined. Set `RUN_ALL=yes` or `RUN_ALL=no` in `config` to control every section,
+then use individual `RUN_*` values as exceptions. The complete list is in
+`config.example`.
+
+You can override config values with command-line options. Options accept `yes` or
+`no`, using either form below:
+
+```sh
+./install.sh --all=no --install-rosetta=yes
+./install.sh --update-macos=no --install-rosetta=yes
+./install.sh --install-homebrew no --reboot no
+```
+
+Individual section controls override global controls regardless of argument
+order. Precedence is individual CLI option, individual config value, `--all`,
+then `RUN_ALL`. Run `./install.sh --help` to list every available section.
+Enabled Node and Git sections also read `NODE_INSTALL_METHOD`, `GIT_NAME`, and
+`GIT_EMAIL` from `config`, prompting only for values that remain undefined.
 
 ## To Do and Feature Ideas
 
