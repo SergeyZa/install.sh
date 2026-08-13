@@ -1,3 +1,10 @@
+brew "fzf"
+# Fish-like fast/unobtrusive autosuggestions for zsh
+brew "zsh-autosuggestions"
+# Shell extension to navigate your filesystem faster
+brew "zoxide"
+# Additional completion definitions for zsh
+brew "zsh-completions"
 # Distributed revision control system
 # apparentli Apple already includes git?
 #brew "git"
@@ -49,3 +56,4 @@ cask "telegram"
 cask "iterm2"
 # Official Amazon AWS command-line interface
 brew "awscli"
+# Command-line fuzzy finder written in Go
