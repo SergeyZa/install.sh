@@ -1,3 +1,4 @@
+# Command-line fuzzy finder written in Go
 brew "fzf"
 # Fish-like fast/unobtrusive autosuggestions for zsh
 brew "zsh-autosuggestions"
@@ -5,6 +6,9 @@ brew "zsh-autosuggestions"
 brew "zoxide"
 # Additional completion definitions for zsh
 brew "zsh-completions"
+# Fish shell like syntax highlighting for zsh
+brew "zsh-syntax-highlighting"
+
 # Distributed revision control system
 # apparentli Apple already includes git?
 #brew "git"
@@ -56,4 +60,3 @@ cask "telegram"
 cask "iterm2"
 # Official Amazon AWS command-line interface
 brew "awscli"
-# Command-line fuzzy finder written in Go
