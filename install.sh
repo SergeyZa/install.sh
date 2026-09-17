@@ -199,7 +199,7 @@ install_homebrew() {
   echo
   echo "${GREEN}Checking installation.."
   echo
-  "$brew_command" update || return 1
+  "$brew_command" update || echo "${RED}Homebrew update failed; continuing.${NC}" >&2
   "$brew_command" doctor || echo "${RED}Homebrew doctor reported warnings; continuing.${NC}" >&2
   export HOMEBREW_NO_INSTALL_CLEANUP=1
 }
