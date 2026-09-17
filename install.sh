@@ -158,10 +158,26 @@ install_homebrew() {
   fi
 
   if [[ -z "$brew_command" ]]; then
+    local architecture=$(/usr/bin/uname -m)
+    local installer_url
+    case "$architecture" in
+      arm64)
+        installer_url=https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+        ;;
+      x86_64)
+        installer_url=https://raw.githubusercontent.com/Homebrew/install/700c9a145d37a3f0f3bd3b7c208d7adab31bd278/install.sh
+        echo "${GREY}Warning: Homebrew on Intel macOS is a Tier 3 configuration.${NC}" >&2
+        ;;
+      *)
+        echo "${RED}Homebrew is not available for macOS architecture '${architecture}'.${NC}" >&2
+        return 1
+        ;;
+    esac
+
     echo
     echo "${GREEN}Installing Homebrew"
     echo
-    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL "$installer_url")"
 
     if [[ -x /opt/homebrew/bin/brew ]]; then
       brew_command=/opt/homebrew/bin/brew
