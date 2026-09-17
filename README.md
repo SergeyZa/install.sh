@@ -70,6 +70,8 @@ then `RUN_ALL`. Run `./install.sh --help` to list every available section.
 Enabled Node and Git sections also read `NODE_INSTALL_METHOD`, `GIT_NAME`, and
 `GIT_EMAIL` from `config`, prompting only for values that remain undefined.
 
+Use `./install.sh --verbose` to show how each section's value is resolved.
+
 ## To Do and Feature Ideas
 
 - **Error Handling:** Now only takes in to account a user who runs it for the first time.

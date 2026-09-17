@@ -23,8 +23,7 @@ DOCK_REMOVE=(
 )
 
 RUN_CONFIGURE_SETTINGS=true
-SETTINGS=
-(
+SETTINGS=(
   # Shows all file extensions in Finder
   "defaults write -g AppleShowAllExtensions -bool true"
   # Shows hidden files in Finder

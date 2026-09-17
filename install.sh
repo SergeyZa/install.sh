@@ -37,10 +37,12 @@ typeset -A SECTION_PARAMETERS=(
   reboot RUN_REBOOT
 )
 typeset -A CLI_SECTION_VALUES
+VERBOSE=0
 
 usage() {
-  echo "Usage: ${SCRIPT_NAME} [--all yes|no] [--section yes|no]"
+  echo "Usage: ${SCRIPT_NAME} [--verbose] [--all yes|no] [--section yes|no]"
   echo
+  echo "  --verbose                   Show detailed diagnostic output"
   echo "  --all                       Run or skip every unspecified section"
   echo
   echo "Sections:"
@@ -57,6 +59,11 @@ while (( $# > 0 )); do
     --help|-h)
       usage
       exit 0
+      ;;
+    --verbose)
+      VERBOSE=1
+      shift
+      continue
       ;;
     --*=*)
       option=${argument%%=*}
@@ -104,10 +111,17 @@ while (( $# > 0 )); do
   shift
 done
 
+verbose_output() {
+  (( VERBOSE )) || return 0
+  echo "${GREY}$*${NC}"
+}
+
 should_run() {
   local variable_name=$1
   local prompt=$2
   local value
+
+  verbose_output "Resolving ${variable_name}: ${prompt}"
 
   if (( ${+CLI_SECTION_VALUES[$variable_name]} )); then
     value=${CLI_SECTION_VALUES[$variable_name]}
@@ -121,6 +135,8 @@ should_run() {
     read "value?${prompt} [y/N] "
   fi
 
+  verbose_output "Determined value for ${variable_name}: ${value}"
+
   case ${(L)value} in
     y|yes|true|1) return 0 ;;
     n|no|false|0|'') return 1 ;;
@@ -131,23 +147,57 @@ should_run() {
   esac
 }
 
+install_homebrew() {
+  local brew_command
+  if command -v brew >/dev/null 2>&1; then
+    brew_command=$(command -v brew)
+  elif [[ -x /opt/homebrew/bin/brew ]]; then
+    brew_command=/opt/homebrew/bin/brew
+  elif [[ -x /usr/local/bin/brew ]]; then
+    brew_command=/usr/local/bin/brew
+  fi
+
+  if [[ -z "$brew_command" ]]; then
+    echo
+    echo "${GREEN}Installing Homebrew"
+    echo
+    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+    if [[ -x /opt/homebrew/bin/brew ]]; then
+      brew_command=/opt/homebrew/bin/brew
+    elif [[ -x /usr/local/bin/brew ]]; then
+      brew_command=/usr/local/bin/brew
+    fi
+  fi
+
+  if [[ -z "$brew_command" ]]; then
+    echo "${RED}Homebrew installation failed: brew was not found.${NC}" >&2
+    return 1
+  fi
+
+  local shellenv_line="eval \"\$(${brew_command} shellenv)\""
+  touch "${HOME}/.zprofile"
+  grep -Fqx "$shellenv_line" "${HOME}/.zprofile" || echo "$shellenv_line" >> "${HOME}/.zprofile"
+  eval "$(${brew_command} shellenv)"
+
+  echo
+  echo "${GREEN}Checking installation.."
+  echo
+  "$brew_command" update && "$brew_command" doctor || return 1
+  export HOMEBREW_NO_INSTALL_CLEANUP=1
+}
+
 # COLOR
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+GREY='\033[0;90m'
 NC='\033[0m' # No Color
 
 #########
 # Start #
 #########
 
-clear
-echo " _           _        _ _       _     "
-echo "(_)         | |      | | |     | |    "
-echo " _ _ __  ___| |_ __ _| | |  ___| |__  "
-echo "| | |_ \/ __| __/ _  | | | / __| |_ \ "
-echo "| | | | \__ \ || (_| | | |_\__ \ | | |"
-echo "|_|_| |_|___/\__\__,_|_|_(_)___/_| |_|"
-echo
+echo "install.sh"
 echo
 if should_run RUN_AUTHENTICATE_SUDO "Authenticate with sudo upfront?"; then
   echo Enter root password
@@ -178,22 +228,7 @@ fi
 
 # Install Homebrew
 if should_run RUN_INSTALL_HOMEBREW "Install Homebrew?"; then
-  echo
-  echo "${GREEN}Installing Homebrew"
-  echo
-  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-  # Append Homebrew initialization to .zprofile
-  echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >>${HOME}/.zprofile
-  # Immediately evaluate the Homebrew environment settings for the current session
-  eval "$(/opt/homebrew/bin/brew shellenv)"
-
-  # Check installation and update
-  echo
-  echo "${GREEN}Checking installation.."
-  echo
-  brew update && brew doctor
-  export HOMEBREW_NO_INSTALL_CLEANUP=1
+  install_homebrew || exit 1
 fi
 
 # Check for Brewfile in the current directory and use it if present
@@ -336,6 +371,9 @@ fi
 
 # Dock settings
 if should_run RUN_CONFIGURE_DOCK "Apply Dock settings?"; then
+  if ! command -v brew >/dev/null 2>&1; then
+    install_homebrew || exit 1
+  fi
   brew install dockutil
   # Handle replacements
   for item in "${DOCK_REPLACE[@]}"; do
@@ -381,14 +419,7 @@ if should_run RUN_INSTALL_OH_MY_ZSH "Install Oh My Zsh?"; then
   sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 fi
 
-clear
-echo "${GREEN}______ _____ _   _  _____ "
-echo "${GREEN}|  _  \  _  | \ | ||  ___|"
-echo "${GREEN}| | | | | | |  \| || |__  "
-echo "${GREEN}| | | | | | | .   ||  __| "
-echo "${GREEN}| |/ /\ \_/ / |\  || |___ "
-echo "${GREEN}|___/  \___/\_| \_/\____/ "
-
+echo "${GREEN}Done"
 echo
 echo
 if should_run RUN_REBOOT "Reboot now?"; then
